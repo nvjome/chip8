@@ -1,7 +1,7 @@
 [workspace]
 
 members = [
-    "cpu",
+    "core",
     "frontend_sdl",
 ]
 
