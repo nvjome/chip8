@@ -1,0 +1,8 @@
+[workspace]
+
+members = [
+    "cpu",
+    "frontend_sdl",
+]
+
+resolver = "2"
