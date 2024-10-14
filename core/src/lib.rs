@@ -1,4 +1,6 @@
 use std::error;
+use std::fs::File;
+use std::io::Read;
 
 mod fonts;
 
@@ -38,9 +40,23 @@ impl CPU {
         }
     }
 
-    pub fn load(&self) -> Result<(), Box<dyn error::Error>> {
+    pub fn load_rom(&mut self, path: &str) -> Result<(), Box<dyn error::Error>> {
         // Load ROM contents into RAM, starting at 0x200
-        todo!()
+        // Consider moving file IO into a different module
+        let mut rom_file = File::open(path)?;
+        let mut rom_buffer = Vec::new();
+        rom_file.read_to_end(&mut rom_buffer)?;
+
+        // Check if ROM fits within available program space
+        if rom_buffer.len() > 0xA00 {
+            return Err(Box::from("ROM size exceeds RAM capacity"));
+        }
+
+        let start = START_ADDRESS as usize;
+        let end = (START_ADDRESS as usize) + rom_buffer.len();
+        self.ram[start..end].copy_from_slice(&rom_buffer);
+
+        Ok(())
     }
 
     pub fn cycle(&mut self) {
