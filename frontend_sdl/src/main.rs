@@ -1,7 +1,7 @@
-use core::add;
+use core::CPU;
 
 fn main() {
     println!("Hello, world!");
-    let num = 10;
-    println!("{num} plus one is {}", add(num, 1));
+
+    let mut cpu = CPU::new();
 }

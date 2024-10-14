@@ -1,8 +1,9 @@
+mod fonts;
+mod core_error;
+
 use std::error;
 use std::fs::File;
 use std::io::Read;
-
-mod fonts;
 
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
@@ -42,32 +43,40 @@ impl CPU {
 
     pub fn load_rom(&mut self, path: &str) -> Result<(), Box<dyn error::Error>> {
         // Load ROM contents into RAM, starting at 0x200
-        // Consider moving file IO into a different module
         let mut rom_file = File::open(path)?;
         let mut rom_buffer = Vec::new();
         rom_file.read_to_end(&mut rom_buffer)?;
 
-        // Check if ROM fits within available program space
-        if rom_buffer.len() > 0xA00 {
-            return Err(Box::from("ROM size exceeds RAM capacity"));
-        }
-
-        let start = START_ADDRESS as usize;
-        let end = (START_ADDRESS as usize) + rom_buffer.len();
-        self.ram[start..end].copy_from_slice(&rom_buffer);
+        self.load_rom_to_ram(&rom_buffer)?;
 
         Ok(())
     }
 
-    pub fn cycle(&mut self) {
-        let op_code = self.fetch();
-        self.execute(op_code);
+    fn load_rom_to_ram(&mut self, data: &[u8]) -> Result<(), core_error::CoreError> {
+        // Check if ROM fits within available program space
+        if data.len() > 0xA00 {
+            return Err(core_error::CoreError::RomSizeError);
+        }
+
+        let start = START_ADDRESS as usize;
+        let end = (START_ADDRESS as usize) + data.len();
+        self.ram[start..end].copy_from_slice(data);
+
+        Ok(())
     }
 
-    pub fn fetch(&mut self) -> u16 {
+    pub fn cycle(&mut self) -> Result<(), core_error::CoreError> {
+        let op_code = self.fetch()?;
+        self.execute(op_code);
+        Ok(())
+    }
+
+    pub fn fetch(&mut self) -> Result<u16, core_error::CoreError> {
         // Program could panic here if program_counter is higher than ram.len()
+        // Instead, return ProgramCounterError
         if ((self.program_counter + 1) as usize) >= RAM_SIZE {
-            panic!("Program counter exceeds RAM size");
+            // panic!("Program counter exceeds RAM size");
+             return Err(core_error::CoreError::ProgramCounterError);
         }
 
         let upper_byte = self.ram[self.program_counter as usize];
@@ -88,7 +97,7 @@ impl CPU {
         let opcode: u16 = (upper_byte as u16) << 8 | lower_byte as u16;
         self.program_counter += 2;
         
-        opcode
+        Ok(opcode)
     }
 
     fn execute(&mut self, op_code: u16) {
@@ -96,39 +105,45 @@ impl CPU {
     }
 }
 
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-
-    #[test]
-    fn fetch_code() {
+    fn fetch_opcode() {
         let mut cpu = CPU::new();
         cpu.ram[0] = 0xDE;
         cpu.ram[1] = 0xAD;
         cpu.ram[2] = 0xBE;
         cpu.ram[3] = 0xEF;
         cpu.program_counter = 2;
-
-        let code = cpu.fetch();
+        let code = cpu.fetch().unwrap();
         assert_eq!(code, 0xBEEF);
     }
 
     #[test]
-    #[should_panic(expected = "Program counter exceeds RAM size")]
-    fn fetch_out_of_bounds() {
+    fn fetch_opcode_bounds() {
         let mut cpu = CPU::new();
         cpu.program_counter = RAM_SIZE as u16;
+        assert!(cpu.fetch().is_err());
+    }
 
-        let code = cpu.fetch();
+    #[test]
+    fn load_small_rom() {
+        let mut cpu = CPU::new();
+        let rom: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
+        let _ = cpu.load_rom_to_ram(&rom);
+        let code = cpu.fetch().unwrap();
+        assert_eq!(code, 0xDEAD);
+    }
+
+    #[test]
+    fn load_large_rom() {
+        let mut cpu = CPU::new();
+        // Try to load a ROM as large as the RAM
+        let rom: [u8; RAM_SIZE] = [0xA; RAM_SIZE];
+        let load_result = cpu.load_rom_to_ram(&rom);
+        print!("{:?}", load_result);
+        assert!(load_result.is_err());
     }
 }
