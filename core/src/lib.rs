@@ -50,7 +50,6 @@ impl CPU {
 
     pub fn fetch(&mut self) -> u16 {
         // Program could panic here if program_counter is higher than ram.len()
-        // I tried to use ram.get and a slice for 2 bytes, but couldn't get it to work...
         if ((self.program_counter + 1) as usize) >= RAM_SIZE {
             panic!("Program counter exceeds RAM size");
         }
@@ -58,15 +57,16 @@ impl CPU {
         let upper_byte = self.ram[self.program_counter as usize];
         let lower_byte = self.ram[(self.program_counter + 1) as usize];
 
+        // I tried to use ram.get and a slice for 2 bytes, but couldn't get it to work...
         /*
         let index = self.program_counter as usize;
         
-        let bytes = match self.ram.get(0..1) {
+        let bytes = match self.ram.get(index..index+1) {
             Some(b) => b,
-            None => panic!("Program counter out of bounds (0-4096"),
+            None => panic!("Program exceeds RAM size"),
         };
 
-        let opcode2 = (bytes[0] as u16) << 8 | (bytes[1] as u16);
+        let opcode = (bytes[0] as u16) << 8 | (bytes[1] as u16);
         */
 
         let opcode: u16 = (upper_byte as u16) << 8 | lower_byte as u16;
