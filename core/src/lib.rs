@@ -136,31 +136,31 @@ impl CPU {
                 self.program_counter = op_code & 0x0FFF;
             },
 
-            (0x3, x, _, _) => { // if vx != NN then
-                if self.v_register[x as usize] != (op_code & 0x00FF) as u8 {self.program_counter += 2};
-            },
-
-            (0x4, x, _, _) => { // if vx == NN then
+            (0x3, x, _, _) => { // Skip if vx == NN
                 if self.v_register[x as usize] == (op_code & 0x00FF) as u8 {self.program_counter += 2};
             },
 
-            (0x5, x, y, 0) => { // if vx != vy then
-                if self.v_register[x as usize] != self.v_register[y as usize] {self.program_counter += 2};
+            (0x4, x, _, _) => { // Skip if vx != NN
+                if self.v_register[x as usize] != (op_code & 0x00FF) as u8 {self.program_counter += 2};
             },
 
-            (0x6, x, _, _) => self.v_register[x as usize] = (op_code & 0x00FF) as u8, // store NN in vx
+            (0x5, x, y, 0) => { // Skip if vx == vy
+                if self.v_register[x as usize] == self.v_register[y as usize] {self.program_counter += 2};
+            },
 
-            (0x7, x, _, _) => self.v_register[x as usize] += (op_code & 0x00FF) as u8, // add NN to vx
+            (0x6, x, _, _) => self.v_register[x as usize] = (op_code & 0x00FF) as u8, // Store NN in vx
 
-            (0x8, x, y, 0) => self.v_register[x as usize] = self.v_register[y as usize], // store vy in vx
+            (0x7, x, _, _) => self.v_register[x as usize] += (op_code & 0x00FF) as u8, // Add NN to vx
 
-            (0x8, x, y, 0x1) => self.v_register[x as usize] = self.v_register[x as usize] | self.v_register[y as usize], // store vx OR vy in vx
+            (0x8, x, y, 0) => self.v_register[x as usize] = self.v_register[y as usize], // Store vy in vx
 
-            (0x8, x, y, 0x2) => self.v_register[x as usize] = self.v_register[x as usize] & self.v_register[y as usize], // store vx AND vy in vx
+            (0x8, x, y, 0x1) => self.v_register[x as usize] = self.v_register[x as usize] | self.v_register[y as usize], // Store vx OR vy in vx
 
-            (0x8, x, y, 0x3) => self.v_register[x as usize] = self.v_register[x as usize] ^ self.v_register[y as usize], // store vx XOR vy in vx
+            (0x8, x, y, 0x2) => self.v_register[x as usize] = self.v_register[x as usize] & self.v_register[y as usize], // Store vx AND vy in vx
 
-            (0x8, x, y, 0x4) => { // store vx + vy in vx, set/unset carry flag vf
+            (0x8, x, y, 0x3) => self.v_register[x as usize] = self.v_register[x as usize] ^ self.v_register[y as usize], // Store vx XOR vy in vx
+
+            (0x8, x, y, 0x4) => { // Store vx + vy in vx, set/unset carry flag vf
                 let (sum, carry) = self.v_register[x as usize].overflowing_add(self.v_register[y as usize]);
                 self.v_register[x as usize] = sum;
                 self.v_register[0xf] = match carry {
@@ -169,7 +169,7 @@ impl CPU {
                 };
             },
 
-            (0x8, x, y, 0x5) => { // store vx - vy in vx, set/unset carry flag vf
+            (0x8, x, y, 0x5) => { // Store vx - vy in vx, set/unset carry flag vf
                 let (sum, carry) = self.v_register[x as usize].overflowing_sub(self.v_register[y as usize]);
                 self.v_register[x as usize] = sum;
                 self.v_register[0xf] = match carry {
@@ -178,9 +178,27 @@ impl CPU {
                 };
             },
 
-            (0x8, x, y, 0x6) => { // set vf to LSB of vy, store vy >> 1 in vx
+            (0x8, x, y, 0x6) => { // Set vf to LSB of vy, store vy >> 1 in vx
                 self.v_register[0xf] = self.v_register[y as usize] & 0x01;
                 self.v_register[x as usize] = self.v_register[y as usize] >> 1;
+            },
+
+            (0x8, x, y, 0x7) => { // Store vy - vx in vx, set/unset carry flag vf
+                let (sum, carry) = self.v_register[y as usize].overflowing_sub(self.v_register[x as usize]);
+                self.v_register[x as usize] = sum;
+                self.v_register[0xf] = match carry {
+                    true =>  0,
+                    false => 0x1,
+                };
+            },
+
+            (0x8, x, y, 0xE) => { // Set vf to MSB of vy, store vy << 1 in vx
+                self.v_register[0xf] = (self.v_register[y as usize] & 0x80) >> 7;
+                self.v_register[x as usize] = self.v_register[y as usize] << 1;
+            },
+
+            (0x9, x, y, 0) => { // Skip if vx != vy
+                if self.v_register[x as usize] != self.v_register[y as usize] {self.program_counter += 2};
             },
 
             (_, _, _, _) => execute_result = Err(CoreError::OpcodeError { opcode: (op_code) }),
@@ -272,8 +290,112 @@ mod tests {
     #[test]
     fn op_1nnn() {
         let mut cpu = CPU::new();
-        let _ = cpu.execute(0x1123);
-        assert_eq!(cpu.program_counter, 0x0123);
+        let _ = cpu.execute(0x1234);
+        assert_eq!(cpu.program_counter, 0x0234);
+    }
+
+    #[test]
+    fn op_2nnn() {
+        let mut cpu = CPU::new();
+        cpu.program_counter = 0x0222;
+        let _ = cpu.execute(0x2234);
+        assert_eq!(cpu.program_counter, 0x0234);
+        assert_eq!(cpu.stack[0], 0x0222);
+    }
+
+    #[test]
+    fn op_3xnn() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0] = 0xAB; // vx
+        let _ = cpu.execute(0x30AB);
+        assert_eq!(cpu.program_counter, START_ADDRESS + 2);
+    }
+
+    #[test]
+    fn op_4xnn() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0] = 0xAB; // vx
+        let _ = cpu.execute(0x40AC);
+        assert_eq!(cpu.program_counter, START_ADDRESS + 2);
+    }
+
+    #[test]
+    fn op_5xy0() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0] = 0xAB; // vx
+        cpu.v_register[1] = 0xAB; // vy
+        let _ = cpu.execute(0x5010);
+        assert_eq!(cpu.program_counter, START_ADDRESS + 2);
+    }
+
+    #[test]
+    fn op_6xnn() {
+        let mut cpu = CPU::new();
+        let _ = cpu.execute(0x65AB);
+        assert_eq!(cpu.v_register[5], 0xAB);
+    }
+
+    #[test]
+    fn op_7xnn() {
+        let mut cpu = CPU::new();
+        cpu.v_register[5] = 0x04;
+        let _ = cpu.execute(0x75AB);
+        assert_eq!(cpu.v_register[5], 0xAF);
+    }
+
+    #[test]
+    fn op_8xy0() {
+        let mut cpu = CPU::new();
+        cpu.v_register[1] = 0xAB; // vy
+        let _ = cpu.execute(0x8010);
+        assert_eq!(cpu.v_register[0], cpu.v_register[1]);
+    }
+
+    #[test]
+    fn op_8xy1() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0] = 0x55; // vx
+        cpu.v_register[1] = 0xAA; // vy
+        let _ = cpu.execute(0x8011);
+        assert_eq!(cpu.v_register[0], 0xFF);
+    }
+
+    #[test]
+    fn op_8xy2() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0] = 0x55; // vx
+        cpu.v_register[1] = 0xAA; // vy
+        let _ = cpu.execute(0x8012);
+        assert_eq!(cpu.v_register[0], 0x00);
+    }
+
+    #[test]
+    fn op_8xy3() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0] = 0x5F; // vx
+        cpu.v_register[1] = 0xAF; // vy
+        let _ = cpu.execute(0x8013);
+        assert_eq!(cpu.v_register[0], 0xF0);
+    }
+
+    #[test]
+    fn op_8xy4() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0] = 0x5F; // vx
+        cpu.v_register[1] = 0xAF; // vy
+        let _ = cpu.execute(0x8014);
+        assert_eq!(cpu.v_register[0], 0x0E);
+        assert_eq!(cpu.v_register[0xf], 0x01);
+    }
+
+    #[test]
+    fn op_8xy5() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0] = 0x5F; // vx
+        cpu.v_register[1] = 0xAF; // vy
+        let _ = cpu.execute(0x8015);
+        assert_eq!(cpu.v_register[0], 0xB0);
+        assert_eq!(cpu.v_register[0xf], 0x00);
     }
 
     #[test]
@@ -284,5 +406,24 @@ mod tests {
         assert_eq!(cpu.v_register[0], 0x55);
         assert_eq!(cpu.v_register[1], 0xAB);
         assert_eq!(cpu.v_register[0xf], 0x01);
+    }
+
+    #[test]
+    fn op_8xye() {
+        let mut cpu = CPU::new();
+        cpu.v_register[1] = 0xAB; // vy
+        let _ = cpu.execute(0x801E);
+        assert_eq!(cpu.v_register[0], 0x56);
+        assert_eq!(cpu.v_register[1], 0xAB);
+        assert_eq!(cpu.v_register[0xf], 0x01);
+    }
+
+    #[test]
+    fn op_9xy0() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0] = 0xAB; // vx
+        cpu.v_register[1] = 0xAC; // vy
+        let _ = cpu.execute(0x9010);
+        assert_eq!(cpu.program_counter, START_ADDRESS + 2);
     }
 }
