@@ -10,6 +10,7 @@ use crate::fonts::FONT_SET_1;
 
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
+const SCREEN_BUFF_SIZE: usize = SCREEN_WIDTH * SCREEN_HEIGHT;
 
 const RAM_SIZE: usize = 4096;
 const START_ADDRESS: u16 = 0x200;
@@ -25,7 +26,8 @@ pub struct CPU {
     stack: Vec<u16>,
     delay_timer: u8,
     sound_timer: u8,
-    display_buffer: [bool; SCREEN_WIDTH * SCREEN_HEIGHT],
+    display_buffer: [bool; SCREEN_BUFF_SIZE],
+    display_update_flag: bool,
     key_states: [bool; NUM_KEYS],
 }
 
@@ -39,7 +41,8 @@ impl CPU {
             stack: Vec::with_capacity(STACK_SIZE),
             delay_timer: 0,
             sound_timer: 0,
-            display_buffer: [false; SCREEN_WIDTH * SCREEN_HEIGHT],
+            display_buffer: [false; SCREEN_BUFF_SIZE],
+            display_update_flag: false,
             key_states: [false; NUM_KEYS],
         };
 
@@ -55,7 +58,8 @@ impl CPU {
         self.stack = Vec::with_capacity(STACK_SIZE);
         self.delay_timer = 0;
         self.sound_timer = 0;
-        self.display_buffer = [false; SCREEN_WIDTH * SCREEN_HEIGHT];
+        self.display_buffer = [false; SCREEN_BUFF_SIZE];
+        self.display_update_flag = false;
         self.key_states = [false; NUM_KEYS];
     }
 
@@ -85,32 +89,19 @@ impl CPU {
 
     pub fn cycle(&mut self) -> Result<(), CoreError> {
         let op_code = self.fetch()?;
-        self.execute(op_code);
+        self.execute(op_code)?;
         Ok(())
     }
 
     fn fetch(&mut self) -> Result<u16, CoreError> {
-        // Program could panic here if program_counter is higher than ram.len()
-        // Instead, return ProgramCounterError
+        // Program would panic if program_counter is higher than ram.len()
+        // Instead, check the bounds and return ProgramCounterError in case of problem
         if ((self.program_counter + 1) as usize) >= RAM_SIZE {
-            // panic!("Program counter exceeds RAM size");
              return Err(CoreError::ProgramCounterError { index: self.program_counter });
         }
 
         let upper_byte = self.ram[self.program_counter as usize];
         let lower_byte = self.ram[(self.program_counter + 1) as usize];
-
-        // I tried to use ram.get and a slice for 2 bytes, but couldn't get it to work...
-        /*
-        let index = self.program_counter as usize;
-        
-        let bytes = match self.ram.get(index..index+1) {
-            Some(b) => b,
-            None => panic!("Program exceeds RAM size"),
-        };
-
-        let opcode = (bytes[0] as u16) << 8 | (bytes[1] as u16);
-        */
 
         let opcode: u16 = (upper_byte as u16) << 8 | lower_byte as u16;
         self.program_counter += 2;
@@ -118,11 +109,95 @@ impl CPU {
         Ok(opcode)
     }
 
-    fn execute(&mut self, op_code: u16) {
-        match op_code {
-            _ => todo!(),
+    fn execute(&mut self, op_code: u16) -> Result<(), CoreError> {
+        let (nib4, nib3, nib2, nib1) = slice_u16(op_code);
+        let  mut execute_result = Ok(());
+
+        match (nib4, nib3, nib2, nib1) {
+            (0, 0, 0, 0) => (), // NOP
+
+            (0, 0, 0xE, 0) => { // Clear screen
+                self.display_buffer = [false; SCREEN_BUFF_SIZE];
+                self.display_update_flag = true;
+            },
+
+            (0, 0, 0xE, 0xE) => { // Return (exit subroutine)
+                let stack_pop = self.stack.pop();
+                match stack_pop {
+                    Some(addr) => self.program_counter = addr,
+                    None => execute_result = Err(CoreError::StackEmptyError),
+                }
+            },
+
+            (0x1, _, _, _) => self.program_counter = op_code & 0x0FFF, // Jump
+
+            (0x2, _, _, _) => { // Call subroutine
+                self.stack.push(self.program_counter);
+                self.program_counter = op_code & 0x0FFF;
+            },
+
+            (0x3, x, _, _) => { // if vx != NN then
+                if self.v_register[x as usize] != (op_code & 0x00FF) as u8 {self.program_counter += 2};
+            },
+
+            (0x4, x, _, _) => { // if vx == NN then
+                if self.v_register[x as usize] == (op_code & 0x00FF) as u8 {self.program_counter += 2};
+            },
+
+            (0x5, x, y, 0) => { // if vx != vy then
+                if self.v_register[x as usize] != self.v_register[y as usize] {self.program_counter += 2};
+            },
+
+            (0x6, x, _, _) => self.v_register[x as usize] = (op_code & 0x00FF) as u8, // store NN in vx
+
+            (0x7, x, _, _) => self.v_register[x as usize] += (op_code & 0x00FF) as u8, // add NN to vx
+
+            (0x8, x, y, 0) => self.v_register[x as usize] = self.v_register[y as usize], // store vy in vx
+
+            (0x8, x, y, 0x1) => self.v_register[x as usize] = self.v_register[x as usize] | self.v_register[y as usize], // store vx OR vy in vx
+
+            (0x8, x, y, 0x2) => self.v_register[x as usize] = self.v_register[x as usize] & self.v_register[y as usize], // store vx AND vy in vx
+
+            (0x8, x, y, 0x3) => self.v_register[x as usize] = self.v_register[x as usize] ^ self.v_register[y as usize], // store vx XOR vy in vx
+
+            (0x8, x, y, 0x4) => { // store vx + vy in vx, set/unset carry flag vf
+                let (sum, carry) = self.v_register[x as usize].overflowing_add(self.v_register[y as usize]);
+                self.v_register[x as usize] = sum;
+                self.v_register[0xf] = match carry {
+                    true =>  0x1,
+                    false => 0,
+                };
+            },
+
+            (0x8, x, y, 0x5) => { // store vx - vy in vx, set/unset carry flag vf
+                let (sum, carry) = self.v_register[x as usize].overflowing_sub(self.v_register[y as usize]);
+                self.v_register[x as usize] = sum;
+                self.v_register[0xf] = match carry {
+                    true =>  0,
+                    false => 0x1,
+                };
+            },
+
+            (0x8, x, y, 0x6) => { // set vf to LSB of vy, store vy >> 1 in vx
+                self.v_register[0xf] = self.v_register[y as usize] & 0x01;
+                self.v_register[x as usize] = self.v_register[y as usize] >> 1;
+            },
+
+            (_, _, _, _) => execute_result = Err(CoreError::OpcodeError { opcode: (op_code) }),
         }
+
+        return execute_result;
     }
+}
+
+// Slice u16 word into 4-bit nibbles, returned MSB first
+fn slice_u16(word: u16) -> (u16, u16, u16, u16) {
+    let n4 = (word & 0xF000) >> 12;
+    let n3 = (word & 0x0F00) >> 8;
+    let n2 = (word & 0x00F0) >> 4;
+    let n1 = word & 0x000F;
+
+    (n4, n3, n2, n1)
 }
 
 #[cfg(test)]
@@ -165,5 +240,49 @@ mod tests {
         let load_result = cpu.load_rom_to_ram(&rom);
         print!("{:?}", load_result);
         assert!(load_result.is_err());
+    }
+    #[test]
+    fn slice_u16_test() {
+        let word: u16 = 0xDEAD;
+        let (n1, n2, n3, n4) = slice_u16(word);
+        assert_eq!(n1, 0xD);
+        assert_eq!(n2, 0xE);
+        assert_eq!(n3, 0xA);
+        assert_eq!(n4, 0xD);
+    }
+
+    #[test]
+    fn op_00e0() {
+        let mut cpu = CPU::new();
+        cpu.display_buffer = [true; SCREEN_BUFF_SIZE];
+        let _ = cpu.execute(0x00E0);
+        assert_eq!(cpu.display_buffer[SCREEN_WIDTH], false);
+        assert!(cpu.display_update_flag);
+    }
+
+    #[test]
+    fn op_00ee() {
+        let mut cpu = CPU::new();
+        cpu.stack.push(0x0210);
+        let _ = cpu.execute(0x00EE);
+        assert_eq!(cpu.program_counter, 0x0210);
+        assert!(cpu.stack.len() == 0);
+    }
+    
+    #[test]
+    fn op_1nnn() {
+        let mut cpu = CPU::new();
+        let _ = cpu.execute(0x1123);
+        assert_eq!(cpu.program_counter, 0x0123);
+    }
+
+    #[test]
+    fn op_8xy6() {
+        let mut cpu = CPU::new();
+        cpu.v_register[1] = 0xAB; // vy
+        let _ = cpu.execute(0x8016);
+        assert_eq!(cpu.v_register[0], 0x55);
+        assert_eq!(cpu.v_register[1], 0xAB);
+        assert_eq!(cpu.v_register[0xf], 0x01);
     }
 }

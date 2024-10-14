@@ -25,6 +25,10 @@ use thiserror::Error;
 pub enum CoreError {
     #[error("invalid ROM size")]
     RomSizeError,
-    #[error("program counter out of bounds\n index {index}")]
-    ProgramCounterError {index: u16},
+    #[error("program counter out of bounds\n index: {index}")]
+    ProgramCounterError { index: u16 },
+    #[error("invalid opcode: {opcode}")]
+    OpcodeError { opcode: u16 },
+    #[error("cannot pop from empty stack")]
+    StackEmptyError,
 }
