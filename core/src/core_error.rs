@@ -1,3 +1,4 @@
+/*
 use std::fmt;
 
 #[derive(Debug)]
@@ -15,4 +16,15 @@ impl std::fmt::Display for CoreError {
             CoreError::ProgramCounterError => write!(f, "program counter out of bounds"),
         }
     }
+}
+*/
+
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+pub enum CoreError {
+    #[error("invalid ROM size")]
+    RomSizeError,
+    #[error("program counter out of bounds\n index {index}")]
+    ProgramCounterError {index: u16},
 }

@@ -5,6 +5,9 @@ use std::error;
 use std::fs::File;
 use std::io::Read;
 
+use crate::core_error::CoreError;
+use crate::fonts::FONT_SET_1;
+
 pub const SCREEN_WIDTH: usize = 64;
 pub const SCREEN_HEIGHT: usize = 32;
 
@@ -28,7 +31,7 @@ pub struct CPU {
 
 impl CPU {
     pub fn new() -> Self {
-        Self {
+        let mut new_cpu = Self {
             program_counter: START_ADDRESS,
             ram: [0; RAM_SIZE],
             index_register: 0,
@@ -38,7 +41,22 @@ impl CPU {
             sound_timer: 0,
             display_buffer: [false; SCREEN_WIDTH * SCREEN_HEIGHT],
             key_states: [false; NUM_KEYS],
-        }
+        };
+
+        new_cpu.ram[..FONT_SET_1.len()].copy_from_slice(&FONT_SET_1);
+        new_cpu
+    }
+
+    pub fn reset(&mut self) {
+        self.program_counter = START_ADDRESS;
+        self.ram = [0; RAM_SIZE];
+        self.index_register = 0;
+        self.v_register = [0; NUM_REGISTERS];
+        self.stack = Vec::with_capacity(STACK_SIZE);
+        self.delay_timer = 0;
+        self.sound_timer = 0;
+        self.display_buffer = [false; SCREEN_WIDTH * SCREEN_HEIGHT];
+        self.key_states = [false; NUM_KEYS];
     }
 
     pub fn load_rom(&mut self, path: &str) -> Result<(), Box<dyn error::Error>> {
@@ -52,10 +70,10 @@ impl CPU {
         Ok(())
     }
 
-    fn load_rom_to_ram(&mut self, data: &[u8]) -> Result<(), core_error::CoreError> {
+    fn load_rom_to_ram(&mut self, data: &[u8]) -> Result<(), CoreError> {
         // Check if ROM fits within available program space
         if data.len() > 0xA00 {
-            return Err(core_error::CoreError::RomSizeError);
+            return Err(CoreError::RomSizeError);
         }
 
         let start = START_ADDRESS as usize;
@@ -65,18 +83,18 @@ impl CPU {
         Ok(())
     }
 
-    pub fn cycle(&mut self) -> Result<(), core_error::CoreError> {
+    pub fn cycle(&mut self) -> Result<(), CoreError> {
         let op_code = self.fetch()?;
         self.execute(op_code);
         Ok(())
     }
 
-    pub fn fetch(&mut self) -> Result<u16, core_error::CoreError> {
+    fn fetch(&mut self) -> Result<u16, CoreError> {
         // Program could panic here if program_counter is higher than ram.len()
         // Instead, return ProgramCounterError
         if ((self.program_counter + 1) as usize) >= RAM_SIZE {
             // panic!("Program counter exceeds RAM size");
-             return Err(core_error::CoreError::ProgramCounterError);
+             return Err(CoreError::ProgramCounterError { index: self.program_counter });
         }
 
         let upper_byte = self.ram[self.program_counter as usize];
@@ -101,7 +119,9 @@ impl CPU {
     }
 
     fn execute(&mut self, op_code: u16) {
-        todo!()
+        match op_code {
+            _ => todo!(),
+        }
     }
 }
 
