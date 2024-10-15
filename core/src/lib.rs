@@ -4,6 +4,7 @@ mod core_error;
 use std::error;
 use std::fs::File;
 use std::io::Read;
+use rand;
 
 use crate::core_error::CoreError;
 use crate::fonts::FONT_SET_1;
@@ -61,6 +62,8 @@ impl CPU {
         self.display_buffer = [false; SCREEN_BUFF_SIZE];
         self.display_update_flag = false;
         self.key_states = [false; NUM_KEYS];
+
+        self.ram[..FONT_SET_1.len()].copy_from_slice(&FONT_SET_1);
     }
 
     pub fn load_rom(&mut self, path: &str) -> Result<(), Box<dyn error::Error>> {
@@ -85,6 +88,20 @@ impl CPU {
         self.ram[start..end].copy_from_slice(data);
 
         Ok(())
+    }
+
+    pub fn tick_timers(&mut self) {
+        if self.delay_timer > 0 {
+            self.delay_timer -= 1;
+        }
+
+        if self.sound_timer > 0 {
+            if self.sound_timer == 1 {
+                // Tone not implemented
+            }
+
+            self.sound_timer -= 1;
+        }
     }
 
     pub fn cycle(&mut self) -> Result<(), CoreError> {
@@ -199,6 +216,30 @@ impl CPU {
 
             (0x9, x, y, 0) => { // Skip if vx != vy
                 if self.v_register[x as usize] != self.v_register[y as usize] {self.program_counter += 2};
+            },
+
+            (0xA, _, _, _) => self.index_register = op_code & 0x0FFF, // Set i to NNN
+
+            (0xB, _, _, _) => self.index_register = (op_code & 0x0FFF) + self.v_register[0] as u16, // Set i to NNN + v0
+
+            (0xC, x, _, _) => { // Set vx to random number 0-255, mask with NN
+                let random_number = rand::random::<u8>();
+                let mask = (op_code & 0x00FF) as u8;
+                self.v_register[x as usize] = random_number & mask;
+            },
+
+            (0xE, x, 0x9, 0xE) => { // Skip if vx key is pressed
+                let key = self.v_register[x as usize] as usize;
+                if self.key_states[key] {
+                    self.program_counter += 2;
+                }
+            },
+
+            (0xE, x, 0xA, 0x1) => { // Skip if vx key is not pressed
+                let key = self.v_register[x as usize] as usize;
+                if self.key_states[key] == false {
+                    self.program_counter += 2;
+                }
             },
 
             (_, _, _, _) => execute_result = Err(CoreError::OpcodeError { opcode: (op_code) }),
@@ -409,6 +450,16 @@ mod tests {
     }
 
     #[test]
+    fn op_8xy7() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0] = 0xAF; // vx
+        cpu.v_register[1] = 0x5F; // vy
+        let _ = cpu.execute(0x8017);
+        assert_eq!(cpu.v_register[0], 0xB0);
+        assert_eq!(cpu.v_register[0xf], 0x00);
+    }
+
+    #[test]
     fn op_8xye() {
         let mut cpu = CPU::new();
         cpu.v_register[1] = 0xAB; // vy
@@ -425,5 +476,66 @@ mod tests {
         cpu.v_register[1] = 0xAC; // vy
         let _ = cpu.execute(0x9010);
         assert_eq!(cpu.program_counter, START_ADDRESS + 2);
+    }
+
+    #[test]
+    fn op_annn() {
+        let mut cpu = CPU::new();
+        let _ = cpu.execute(0xA321);
+        assert_eq!(cpu.index_register, 0x0321);
+    }
+
+    #[test]
+    fn op_bnnn() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0] = 0x0010;
+        let _ = cpu.execute(0xB321);
+        assert_eq!(cpu.index_register, 0x0331);
+    }
+
+    #[test]
+    fn op_cxnn() {
+        let mut cpu = CPU::new();
+        let _ = cpu.execute(0xcAFF);
+        println!("{}", cpu.v_register[0xA]);
+    }
+
+    #[test]
+    fn op_ex9e() {
+        let mut cpu = CPU::new();
+        cpu.key_states[0x7] = true; // Key 7 pressed
+        cpu.v_register[0] = 0x7; // Key 7 in v0
+        cpu.v_register[1] = 0x4; // Key 4 in v1
+        let _ = cpu.execute(0xE09E);
+        assert_eq!(cpu.program_counter, START_ADDRESS + 2);
+        let _ = cpu.execute(0xE19E);
+        assert_eq!(cpu.program_counter, START_ADDRESS + 2);
+    }
+
+    #[test]
+    fn op_exa1() {
+        let mut cpu = CPU::new();
+        cpu.key_states[0x7] = true; // Key 7 pressed
+        cpu.v_register[0] = 0x7; // Key 7 in v0
+        cpu.v_register[1] = 0x4; // Key 4 in v1
+        let _ = cpu.execute(0xE0A1);
+        assert_eq!(cpu.program_counter, START_ADDRESS);
+        let _ = cpu.execute(0xE1A1);
+        assert_eq!(cpu.program_counter, START_ADDRESS + 2);
+    }
+
+    #[test]
+    fn timer_test() {
+        let mut cpu = CPU::new();
+        cpu.delay_timer = 5;
+        cpu.sound_timer = 4;
+        for _i in 0..4 {
+            cpu.tick_timers();
+        }
+        assert_eq!(cpu.delay_timer, 1);
+        assert_eq!(cpu.sound_timer, 0);
+        cpu.tick_timers();
+        assert_eq!(cpu.delay_timer, 0);
+        assert_eq!(cpu.sound_timer, 0);
     }
 }
