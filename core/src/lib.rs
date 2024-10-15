@@ -18,6 +18,7 @@ const START_ADDRESS: u16 = 0x200;
 const NUM_REGISTERS: usize = 16;
 const STACK_SIZE: usize = 16;
 const NUM_KEYS: usize = 16;
+const FONT_ADDRESS_OFFSET: u16 = 0;
 
 pub struct CPU {
     program_counter: u16,
@@ -47,7 +48,7 @@ impl CPU {
             key_states: [false; NUM_KEYS],
         };
 
-        new_cpu.ram[..FONT_SET_1.len()].copy_from_slice(&FONT_SET_1);
+        new_cpu.load_font(&FONT_ADDRESS_OFFSET, &FONT_SET_1);
         new_cpu
     }
 
@@ -63,7 +64,12 @@ impl CPU {
         self.display_update_flag = false;
         self.key_states = [false; NUM_KEYS];
 
-        self.ram[..FONT_SET_1.len()].copy_from_slice(&FONT_SET_1);
+        // self.ram[(FONT_ADDRESS_OFFSET as usize)..(FONT_ADDRESS_OFFSET as usize) + FONT_SET_1.len()].copy_from_slice(&FONT_SET_1);
+        self.load_font(&FONT_ADDRESS_OFFSET, &FONT_SET_1);
+    }
+
+    fn load_font(&mut self, offset: &u16, font: &[u8; 80]) {
+        self.ram[(*offset as usize)..(*offset as usize) + font.len()].copy_from_slice(font);
     }
 
     pub fn load_rom(&mut self, path: &str) -> Result<(), Box<dyn error::Error>> {
@@ -146,75 +152,75 @@ impl CPU {
                 }
             },
 
-            (0x1, _, _, _) => self.program_counter = op_code & 0x0FFF, // Jump
+            (1, _, _, _) => self.program_counter = op_code & 0x0FFF, // Jump
 
-            (0x2, _, _, _) => { // Call subroutine
+            (2, _, _, _) => { // Call subroutine
                 self.stack.push(self.program_counter);
                 self.program_counter = op_code & 0x0FFF;
             },
 
-            (0x3, x, _, _) => { // Skip if vx == NN
+            (3, x, _, _) => { // Skip if vx == NN
                 if self.v_register[x as usize] == (op_code & 0x00FF) as u8 {self.program_counter += 2};
             },
 
-            (0x4, x, _, _) => { // Skip if vx != NN
+            (4, x, _, _) => { // Skip if vx != NN
                 if self.v_register[x as usize] != (op_code & 0x00FF) as u8 {self.program_counter += 2};
             },
 
-            (0x5, x, y, 0) => { // Skip if vx == vy
+            (5, x, y, 0) => { // Skip if vx == vy
                 if self.v_register[x as usize] == self.v_register[y as usize] {self.program_counter += 2};
             },
 
-            (0x6, x, _, _) => self.v_register[x as usize] = (op_code & 0x00FF) as u8, // Store NN in vx
+            (6, x, _, _) => self.v_register[x as usize] = (op_code & 0x00FF) as u8, // Store NN in vx
 
-            (0x7, x, _, _) => self.v_register[x as usize] += (op_code & 0x00FF) as u8, // Add NN to vx
+            (7, x, _, _) => self.v_register[x as usize] += (op_code & 0x00FF) as u8, // Add NN to vx
 
-            (0x8, x, y, 0) => self.v_register[x as usize] = self.v_register[y as usize], // Store vy in vx
+            (8, x, y, 0) => self.v_register[x as usize] = self.v_register[y as usize], // Store vy in vx
 
-            (0x8, x, y, 0x1) => self.v_register[x as usize] = self.v_register[x as usize] | self.v_register[y as usize], // Store vx OR vy in vx
+            (8, x, y, 1) => self.v_register[x as usize] = self.v_register[x as usize] | self.v_register[y as usize], // Store vx OR vy in vx
 
-            (0x8, x, y, 0x2) => self.v_register[x as usize] = self.v_register[x as usize] & self.v_register[y as usize], // Store vx AND vy in vx
+            (8, x, y, 2) => self.v_register[x as usize] = self.v_register[x as usize] & self.v_register[y as usize], // Store vx AND vy in vx
 
-            (0x8, x, y, 0x3) => self.v_register[x as usize] = self.v_register[x as usize] ^ self.v_register[y as usize], // Store vx XOR vy in vx
+            (8, x, y, 3) => self.v_register[x as usize] = self.v_register[x as usize] ^ self.v_register[y as usize], // Store vx XOR vy in vx
 
-            (0x8, x, y, 0x4) => { // Store vx + vy in vx, set/unset carry flag vf
+            (8, x, y, 4) => { // Store vx + vy in vx, set/unset carry flag vf
                 let (sum, carry) = self.v_register[x as usize].overflowing_add(self.v_register[y as usize]);
                 self.v_register[x as usize] = sum;
                 self.v_register[0xf] = match carry {
-                    true =>  0x1,
+                    true =>  1,
                     false => 0,
                 };
             },
 
-            (0x8, x, y, 0x5) => { // Store vx - vy in vx, set/unset carry flag vf
+            (8, x, y, 5) => { // Store vx - vy in vx, set/unset carry flag vf
                 let (sum, carry) = self.v_register[x as usize].overflowing_sub(self.v_register[y as usize]);
                 self.v_register[x as usize] = sum;
                 self.v_register[0xf] = match carry {
                     true =>  0,
-                    false => 0x1,
+                    false => 1,
                 };
             },
 
-            (0x8, x, y, 0x6) => { // Set vf to LSB of vy, store vy >> 1 in vx
+            (8, x, y, 6) => { // Set vf to LSB of vy, store vy >> 1 in vx
                 self.v_register[0xf] = self.v_register[y as usize] & 0x01;
                 self.v_register[x as usize] = self.v_register[y as usize] >> 1;
             },
 
-            (0x8, x, y, 0x7) => { // Store vy - vx in vx, set/unset carry flag vf
+            (8, x, y, 0x7) => { // Store vy - vx in vx, set/unset carry flag vf
                 let (sum, carry) = self.v_register[y as usize].overflowing_sub(self.v_register[x as usize]);
                 self.v_register[x as usize] = sum;
                 self.v_register[0xf] = match carry {
                     true =>  0,
-                    false => 0x1,
+                    false => 1,
                 };
             },
 
-            (0x8, x, y, 0xE) => { // Set vf to MSB of vy, store vy << 1 in vx
+            (8, x, y, 0xE) => { // Set vf to MSB of vy, store vy << 1 in vx
                 self.v_register[0xf] = (self.v_register[y as usize] & 0x80) >> 7;
                 self.v_register[x as usize] = self.v_register[y as usize] << 1;
             },
 
-            (0x9, x, y, 0) => { // Skip if vx != vy
+            (9, x, y, 0) => { // Skip if vx != vy
                 if self.v_register[x as usize] != self.v_register[y as usize] {self.program_counter += 2};
             },
 
@@ -235,12 +241,22 @@ impl CPU {
                 }
             },
 
-            (0xE, x, 0xA, 0x1) => { // Skip if vx key is not pressed
+            (0xE, x, 0xA, 1) => { // Skip if vx key is not pressed
                 let key = self.v_register[x as usize] as usize;
                 if self.key_states[key] == false {
                     self.program_counter += 2;
                 }
             },
+
+            (0xF, x, 0, 7) => self.v_register[x as usize] = self.delay_timer, // Set vx to value of delay timer
+
+            (0xF, x, 1, 5) => self.delay_timer = self.v_register[x as usize], // Set delay timer to value in vx
+
+            (0xF, x, 1, 8) => self.sound_timer = self.v_register[x as usize], // Set sound timer to value in vx
+
+            (0xF, x, 1, 0xE) => self.index_register = self.index_register.wrapping_add(self.v_register[x as usize] as u16), // Set i to i + vx
+
+            (0xF, x, 2, 9) => self.index_register = (FONT_ADDRESS_OFFSET as u16) + (self.v_register[x as usize] as u16) * 5, // Set i to address of sprite for digit vx
 
             (_, _, _, _) => execute_result = Err(CoreError::OpcodeError { opcode: (op_code) }),
         }
@@ -258,6 +274,8 @@ fn slice_u16(word: u16) -> (u16, u16, u16, u16) {
 
     (n4, n3, n2, n1)
 }
+
+// It's [tests] all the way down!
 
 #[cfg(test)]
 mod tests {
@@ -308,6 +326,21 @@ mod tests {
         assert_eq!(n2, 0xE);
         assert_eq!(n3, 0xA);
         assert_eq!(n4, 0xD);
+    }
+
+    #[test]
+    fn timer_test() {
+        let mut cpu = CPU::new();
+        cpu.delay_timer = 5;
+        cpu.sound_timer = 4;
+        for _i in 0..4 {
+            cpu.tick_timers();
+        }
+        assert_eq!(cpu.delay_timer, 1);
+        assert_eq!(cpu.sound_timer, 0);
+        cpu.tick_timers();
+        assert_eq!(cpu.delay_timer, 0);
+        assert_eq!(cpu.sound_timer, 0);
     }
 
     #[test]
@@ -525,17 +558,43 @@ mod tests {
     }
 
     #[test]
-    fn timer_test() {
+    fn op_fx07() {
         let mut cpu = CPU::new();
-        cpu.delay_timer = 5;
-        cpu.sound_timer = 4;
-        for _i in 0..4 {
-            cpu.tick_timers();
-        }
-        assert_eq!(cpu.delay_timer, 1);
-        assert_eq!(cpu.sound_timer, 0);
-        cpu.tick_timers();
-        assert_eq!(cpu.delay_timer, 0);
-        assert_eq!(cpu.sound_timer, 0);
+        cpu.delay_timer = 0xB2;
+        let _ = cpu.execute(0xF707);
+        assert_eq!(cpu.v_register[7], 0xB2);
+    }
+
+    #[test]
+    fn op_fx15() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0xC] = 0xB2;
+        let _ = cpu.execute(0xFC15);
+        assert_eq!(cpu.delay_timer, 0xB2);
+    }
+
+    #[test]
+    fn op_fx18() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0xC] = 0xB2;
+        let _ = cpu.execute(0xFC18);
+        assert_eq!(cpu.sound_timer, 0xB2);
+    }
+
+    #[test]
+    fn op_fx1e() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0xC] = 0xB2;
+        cpu.index_register = START_ADDRESS;
+        let _ = cpu.execute(0xFC1E);
+        assert_eq!(cpu.index_register, START_ADDRESS + 0xB2);
+    }
+
+    #[test]
+    fn op_fx29() {
+        let mut cpu = CPU::new();
+        cpu.v_register[0xC] = 0x4;
+        let _ = cpu.execute(0xFC29);
+        assert_eq!(cpu.index_register, 0x0004);
     }
 }
