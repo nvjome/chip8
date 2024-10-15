@@ -27,6 +27,8 @@ pub enum CoreError {
     RomSizeError,
     #[error("program counter out of bounds\n index: {index}")]
     ProgramCounterError { index: u16 },
+    #[error("index register out of bounds\n index: {index}")]
+    IndexRegisterError { index: u16 },
     #[error("invalid opcode: {opcode}")]
     OpcodeError { opcode: u16 },
     #[error("cannot pop from empty stack")]
