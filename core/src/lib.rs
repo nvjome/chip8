@@ -98,6 +98,18 @@ impl CPU {
         Ok(())
     }
 
+    pub fn get_display(&self) -> &[bool] {
+        &self.display_buffer
+    }
+
+    pub fn keypress(&mut self, index: usize, pressed: bool) -> Result<(), CoreError> {
+        if index > NUM_KEYS {
+            return Err(CoreError::KeyIndexError { key: index });
+        }
+        self.key_states[index] = pressed;
+        Ok(())
+    }
+
     pub fn tick_timers(&mut self) {
         if self.delay_timer > 0 {
             self.delay_timer -= 1;

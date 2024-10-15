@@ -33,4 +33,6 @@ pub enum CoreError {
     OpcodeError { opcode: u16 },
     #[error("cannot pop from empty stack")]
     StackEmptyError,
+    #[error("invalid keypress index: {key}")]
+    KeyIndexError { key: usize },
 }
