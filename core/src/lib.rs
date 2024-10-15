@@ -266,6 +266,8 @@ impl CPU {
                     true => self.v_register[0xF] = 1,
                     false => self.v_register[0xF] = 0,
                 }
+
+                self.display_update_flag = true;
             },
 
             (0xE, x, 0x9, 0xE) => { // Skip if vx key is pressed
@@ -618,6 +620,7 @@ mod tests {
         assert_eq!(cpu.display_buffer[0], true);
         assert_eq!(cpu.display_buffer[SCREEN_WIDTH + 1], false);
         assert_eq!(cpu.display_buffer[(SCREEN_WIDTH * 4) + 3], true);
+        assert!(cpu.display_update_flag);
     }
 
     #[test]
