@@ -19,6 +19,8 @@ const NUM_REGISTERS: usize = 16;
 const STACK_SIZE: usize = 16;
 const NUM_KEYS: usize = 16;
 const FONT_ADDRESS_OFFSET: u16 = 0;
+const SPRITE_WIDTH: usize = 8;
+const SPRITE_BYTES_MAX: usize = 15;
 
 pub struct CPU {
     program_counter: u16,
@@ -232,6 +234,38 @@ impl CPU {
                 let random_number = rand::random::<u8>();
                 let mask = (op_code & 0x00FF) as u8;
                 self.v_register[x as usize] = random_number & mask;
+            },
+
+            (0xD, x, y, n) => { // Draw n-byte sprite on screen at (vx,vy) starting at i, set vf if a pixel is erased
+                // Get srpite coordinates
+                let sprite_x = self.v_register[x as usize];
+                let sprite_y = self.v_register[y as usize];
+                let mut collide = false;
+
+                // Copy sprint from RAM. Uses more memory than just reading from RAM, but should make code cleaner
+                let mut sprite: Vec<u8> = Vec::with_capacity(SPRITE_BYTES_MAX);
+                for i in 0..(n as usize) {
+                    sprite.push(self.ram[self.index_register as usize + i]);
+                }
+
+                for byte_row in 0..(sprite.len() as u8) {
+                    for bit_col in 0..(SPRITE_WIDTH as u8) {
+                        if ((0b10000000 >> bit_col) & sprite[byte_row as usize]) != 0 { // Sprite pixel is 1
+                            let pixel_x = (sprite_x + bit_col) as usize % SCREEN_WIDTH; // Wrap around screen
+                            let pixel_y = (sprite_y + byte_row) as usize % SCREEN_HEIGHT;
+
+                            let display_buffer_index = (pixel_y * SCREEN_WIDTH) + pixel_x;
+
+                            collide |= self.display_buffer[display_buffer_index]; // If display pixel is already 1, then there is a collision
+                            self.display_buffer[display_buffer_index] ^= true; // XOR sprite pixel and display pixel
+                        }
+                    }
+                }
+
+                match collide {
+                    true => self.v_register[0xF] = 1,
+                    false => self.v_register[0xF] = 0,
+                }
             },
 
             (0xE, x, 0x9, 0xE) => { // Skip if vx key is pressed
@@ -574,6 +608,16 @@ mod tests {
         let mut cpu = CPU::new();
         assert!(cpu.execute(0xcAFF).is_ok());
         println!("{}", cpu.v_register[0xA]);
+    }
+
+    #[test]
+    fn op_dxyn() {
+        let mut cpu = CPU::new();
+        cpu.index_register = FONT_ADDRESS_OFFSET;
+        assert!(cpu.execute(0xD015).is_ok());
+        assert_eq!(cpu.display_buffer[0], true);
+        assert_eq!(cpu.display_buffer[SCREEN_WIDTH + 1], false);
+        assert_eq!(cpu.display_buffer[(SCREEN_WIDTH * 4) + 3], true);
     }
 
     #[test]
