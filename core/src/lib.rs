@@ -2,8 +2,7 @@ mod fonts;
 mod core_error;
 
 use std::error;
-use std::fs::File;
-use std::io::Read;
+
 use rand;
 
 use crate::core_error::CoreError;
@@ -74,26 +73,19 @@ impl CPU {
         self.ram[(*offset as usize)..(*offset as usize + font.len())].copy_from_slice(font);
     }
 
-    pub fn load_rom(&mut self, path: &str) -> Result<(), Box<dyn error::Error>> {
+    pub fn load_rom_from_buffer(&mut self, rom_buffer: &Vec<u8>) -> Result<(), Box<dyn error::Error>> {
         // Load ROM contents into RAM, starting at 0x200
-        let mut rom_file = File::open(path)?;
-        let mut rom_buffer = Vec::new();
-        rom_file.read_to_end(&mut rom_buffer)?;
+        // let mut rom_file = File::open(path)?;
+        // let mut rom_buffer = Vec::new();
+        // rom_file.read_to_end(&mut rom_buffer)?;
 
-        self.load_rom_to_ram(&rom_buffer)?;
-
-        Ok(())
-    }
-
-    fn load_rom_to_ram(&mut self, data: &[u8]) -> Result<(), CoreError> {
-        // Check if ROM fits within available program space
-        if data.len() > 0xA00 {
-            return Err(CoreError::RomSizeError);
+        if rom_buffer.len() > 0xA00 {
+            return Err(CoreError::RomSizeError.into());
         }
 
         let start = START_ADDRESS as usize;
-        let end = (START_ADDRESS as usize) + data.len();
-        self.ram[start..end].copy_from_slice(data);
+        let end = (START_ADDRESS as usize) + rom_buffer.len();
+        self.ram[start..end].copy_from_slice(&rom_buffer);
 
         Ok(())
     }
@@ -394,8 +386,8 @@ mod tests {
     #[test]
     fn load_small_rom() {
         let mut cpu = CPU::new();
-        let rom: [u8; 4] = [0xDE, 0xAD, 0xBE, 0xEF];
-        assert!(cpu.load_rom_to_ram(&rom).is_ok());
+        let rom = vec![0xDE, 0xAD, 0xBE, 0xEF];
+        assert!(cpu.load_rom_from_buffer(&rom).is_ok());
         let code = cpu.fetch().unwrap();
         assert_eq!(code, 0xDEAD);
     }
@@ -404,8 +396,8 @@ mod tests {
     fn load_large_rom() {
         let mut cpu = CPU::new();
         // Try to load a ROM as large as the RAM
-        let rom: [u8; RAM_SIZE] = [0xA; RAM_SIZE];
-        let load_result = cpu.load_rom_to_ram(&rom);
+        let rom = vec![0xA; RAM_SIZE];
+        let load_result = cpu.load_rom_from_buffer(&rom);
         print!("{:?}", load_result);
         assert!(load_result.is_err());
     }
