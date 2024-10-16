@@ -30,7 +30,7 @@ pub struct CPU {
     delay_timer: u8,
     sound_timer: u8,
     display_buffer: [bool; SCREEN_BUFF_SIZE],
-    display_update_flag: bool,
+    pub display_update_flag: bool,
     key_states: [bool; NUM_KEYS],
 }
 
@@ -241,12 +241,12 @@ impl CPU {
             },
 
             (0xD, x, y, n) => { // Draw n-byte sprite on screen at (vx,vy) starting at i, set vf if a pixel is erased
-                // Get srpite coordinates
+                // Get sprite coordinates
                 let sprite_x = self.v_register[x as usize];
                 let sprite_y = self.v_register[y as usize];
                 let mut collide = false;
 
-                // Copy sprint from RAM. Uses more memory than just reading from RAM, but should make code cleaner
+                // Copy sprite from RAM. Uses more memory than just reading from RAM, but should make code cleaner
                 let mut sprite: Vec<u8> = Vec::with_capacity(SPRITE_BYTES_MAX);
                 for i in 0..(n as usize) {
                     sprite.push(self.ram[self.index_register as usize + i]);

@@ -13,8 +13,10 @@ fn main() {
         process::exit(1);
     }
 
+    println!("Loading file: {}", args[1].clone());
+
     // Open ROM file
-    let mut rom_file = match File::open(args[2].clone()) {
+    let mut rom_file = match File::open(args[1].clone()) {
         Ok(file) => file,
         Err(err) => {
             eprintln!("Error opening file: {}", err);
@@ -38,7 +40,7 @@ fn main() {
     };
 
     // Run frontend loop, exiting in case of errors
-    if let Err(e) = frontend_sdl::run_game(game_sdl) {
+    if let Err(e) = frontend_sdl::run_game(&mut game_sdl) {
         eprintln!("Error running game: {}", e);
         process::exit(1);
     }
