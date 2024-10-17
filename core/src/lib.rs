@@ -232,7 +232,7 @@ impl CPU {
 
             (0xA, _, _, _) => self.index_register = op_code & 0x0FFF, // Set i to NNN
 
-            (0xB, _, _, _) => self.index_register = (op_code & 0x0FFF) + self.v_register[0] as u16, // Set i to NNN + v0
+            (0xB, _, _, _) => self.index_register = (op_code & 0x0FFF).wrapping_add(self.v_register[0] as u16), // Set i to NNN + v0
 
             (0xC, x, _, _) => { // Set vx to random number 0-255, mask with NN
                 let random_number = rand::random::<u8>();
