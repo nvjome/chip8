@@ -207,9 +207,10 @@ impl CPU {
                 };
             },
 
-            (8, x, y, 6) => { // Set vf to LSB of vy, store vy >> 1 in vx
-                self.v_register[0xf] = self.v_register[y as usize] & 0x01;
-                self.v_register[x as usize] = self.v_register[y as usize] >> 1;
+            (8, x, _, 6) => { // Set vf to LSB of vy, store vy >> 1 in vx
+                let lsb = self.v_register[x as usize] & 0x01;
+                self.v_register[x as usize] >>= 1;
+                self.v_register[0xf] = lsb;
             },
 
             (8, x, y, 0x7) => { // Store vy - vx in vx, set/unset carry flag vf
@@ -222,8 +223,9 @@ impl CPU {
             },
 
             (8, x, y, 0xE) => { // Set vf to MSB of vy, store vy << 1 in vx
-                self.v_register[0xf] = (self.v_register[y as usize] & 0x80) >> 7;
+                let msb = (self.v_register[y as usize] & 0x80) >> 7;
                 self.v_register[x as usize] = self.v_register[y as usize] << 1;
+                self.v_register[0xf] = msb;
             },
 
             (9, x, y, 0) => { // Skip if vx != vy

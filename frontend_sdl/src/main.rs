@@ -8,10 +8,26 @@ fn main() {
 
     // Collect command line arguments
     let args: Vec<_> = env::args().collect();
-    if args.len() != 2 {
-        eprintln!("Usage: cargo run /path/to/rom");
+    if args.len() != 4 {
+        eprintln!("Usage: cargo run </path/to/rom> <cycles per frame> <cycles to run> ");
         process::exit(1);
     }
+
+    let cycles_per_frame = match args[2].clone().parse::<u32>() {
+        Ok(n) => n,
+        Err(err) => {
+            eprintln!("Failed to parse arguments: {}", err);
+            process::exit(1);
+        }
+    };
+
+    let cycles = match args[3].clone().parse::<u32>() {
+        Ok(n) => n,
+        Err(err) => {
+            eprintln!("Failed to parse arguments: {}", err);
+            process::exit(1);
+        }
+    };
 
     println!("Loading file: {}", args[1].clone());
 
@@ -31,7 +47,7 @@ fn main() {
     }
 
     // Create fontend instance
-    let mut game_sdl = match frontend_sdl::init_frontend(rom_buffer, 4) {
+    let mut game_sdl = match frontend_sdl::init_frontend(rom_buffer, cycles_per_frame, cycles) {
         Ok(game) => game,
         Err(e) => {
             eprintln!("Error starting frontend: {}", e);

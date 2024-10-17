@@ -14,10 +14,11 @@ pub struct GameSDL {
     subsystem: sdl2::VideoSubsystem,
     window: sdl2::video::Window,
     canvas: sdl2::render::Canvas<Window>,
-    ticks_per_frame: usize,
+    ticks_per_frame: u32,
+    run_cycles: u32,
 }
 
-pub fn init_frontend(rom_buffer: Vec<u8>, ticks: usize) -> Result<GameSDL, Box<dyn error::Error>> {
+pub fn init_frontend(rom_buffer: Vec<u8>, ticks_per_frame: u32, run_cycles: u32) -> Result<GameSDL, Box<dyn error::Error>> {
     let sdl_context = sdl2::init()?;
     let video_subsystem = sdl_context.video()?;
 
@@ -37,7 +38,8 @@ pub fn init_frontend(rom_buffer: Vec<u8>, ticks: usize) -> Result<GameSDL, Box<d
         subsystem: video_subsystem,
         window: window,
         canvas: canvas,
-        ticks_per_frame: ticks,
+        ticks_per_frame: ticks_per_frame,
+        run_cycles: run_cycles,
     };
 
     game.cpu.load_rom_from_buffer(&rom_buffer)?;
@@ -47,6 +49,7 @@ pub fn init_frontend(rom_buffer: Vec<u8>, ticks: usize) -> Result<GameSDL, Box<d
 
 pub fn run_game(game: &mut GameSDL) -> Result<(), Box<dyn error::Error>> {
     let mut event_pump = game.context.event_pump()?;
+    let mut cycles = 0;
 
     'gameloop: loop {
         for evt in event_pump.poll_iter() {
@@ -68,8 +71,14 @@ pub fn run_game(game: &mut GameSDL) -> Result<(), Box<dyn error::Error>> {
             }
         }
 
-        for _ in 0..game.ticks_per_frame {
-            game.cpu.cycle()?;
+        if (cycles < game.run_cycles) || (game.run_cycles == 0) {
+            for _ in 0..game.ticks_per_frame {
+                game.cpu.cycle()?;
+                // If run_cycles is non-zero, run only that many cycles
+                if game.run_cycles > 0 {
+                    cycles += 1;
+                }
+            }
         }
 
         game.cpu.tick_timers();
