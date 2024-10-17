@@ -32,6 +32,9 @@ pub struct CPU {
     display_buffer: [bool; SCREEN_BUFF_SIZE],
     pub display_update_flag: bool,
     key_states: [bool; NUM_KEYS],
+    pressed_key: u8,
+    wait_for_press: bool,
+    wait_for_release: bool,
 }
 
 impl CPU {
@@ -47,6 +50,9 @@ impl CPU {
             display_buffer: [false; SCREEN_BUFF_SIZE],
             display_update_flag: false,
             key_states: [false; NUM_KEYS],
+            pressed_key: 0,
+            wait_for_press: true,
+            wait_for_release: false,
         };
 
         new_cpu.load_font(&FONT_ADDRESS_OFFSET, &FONT_SET_1);
@@ -64,6 +70,8 @@ impl CPU {
         self.display_buffer = [false; SCREEN_BUFF_SIZE];
         self.display_update_flag = false;
         self.key_states = [false; NUM_KEYS];
+        self.pressed_key = 0;
+        self.wait_for_press = true;
 
         // self.ram[(FONT_ADDRESS_OFFSET as usize)..(FONT_ADDRESS_OFFSET as usize) + FONT_SET_1.len()].copy_from_slice(&FONT_SET_1);
         self.load_font(&FONT_ADDRESS_OFFSET, &FONT_SET_1);
@@ -293,16 +301,23 @@ impl CPU {
             (0xF, x, 0, 7) => self.v_register[x as usize] = self.delay_timer, // Set vx to value of delay timer
 
             (0xF, x, 0, 0xA) => { // Wait for a key press, store key in vx
-                let mut wait = true;
-                for i in 0..self.key_states.len() {
-                    if self.key_states[i] {
-                        wait = false;
-                        self.v_register[x as usize] = i as u8;
-                        break; // If multiple keys are pressed, this stops on the lowest indexed one
+                // Check for first pressed key
+                if self.wait_for_press {
+                    for i in 0..self.key_states.len() {
+                        if self.key_states[i] {
+                            self.wait_for_press = false;
+                            self.pressed_key = i as u8;
+                            break; // Stops on the lowest indexed one
+                        }
                     }
-                }
-                if wait {
                     self.program_counter -= 2;
+                }
+                // Check for key to be released
+                if !self.wait_for_press {
+                    if !self.key_states[self.pressed_key as usize] {
+                        self.wait_for_press = true;
+                        self.v_register[x as usize] = self.pressed_key;
+                    }
                 }
             },
 
@@ -560,10 +575,9 @@ mod tests {
     #[test]
     fn op_8xy6() {
         let mut cpu = CPU::new();
-        cpu.v_register[1] = 0xAB; // vy
+        cpu.v_register[0] = 0xAB; // vy
         assert!(cpu.execute(0x8016).is_ok());
         assert_eq!(cpu.v_register[0], 0x55);
-        assert_eq!(cpu.v_register[1], 0xAB);
         assert_eq!(cpu.v_register[0xf], 0x01);
     }
 
@@ -667,7 +681,12 @@ mod tests {
         assert!(cpu.fetch().is_ok()); // Need a fetch to increment program counter
         assert!(cpu.execute(0xF60A).is_ok());
         assert_eq!(cpu.program_counter, START_ADDRESS);
-        cpu.key_states[9] = true;
+        cpu.key_states[9] = true; // Press
+        assert!(cpu.fetch().is_ok());  // Need a fetch to increment program counter
+        assert!(cpu.execute(0xF60A).is_ok());
+        assert_eq!(cpu.v_register[6], 0);
+        assert_eq!(cpu.program_counter, START_ADDRESS);
+        cpu.key_states[9] = false; // Release
         assert!(cpu.fetch().is_ok());  // Need a fetch to increment program counter
         assert!(cpu.execute(0xF60A).is_ok());
         assert_eq!(cpu.v_register[6], 9);
