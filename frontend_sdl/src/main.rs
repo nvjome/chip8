@@ -31,7 +31,7 @@ fn main() {
     }
 
     // Create fontend instance
-    let mut game_sdl = match frontend_sdl::init_frontend(rom_buffer) {
+    let mut game_sdl = match frontend_sdl::init_frontend(rom_buffer, 4) {
         Ok(game) => game,
         Err(e) => {
             eprintln!("Error starting frontend: {}", e);

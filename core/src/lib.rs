@@ -179,7 +179,7 @@ impl CPU {
 
             (6, x, _, _) => self.v_register[x as usize] = (op_code & 0x00FF) as u8, // Store NN in vx
 
-            (7, x, _, _) => self.v_register[x as usize] += (op_code & 0x00FF) as u8, // Add NN to vx
+            (7, x, _, _) => self.v_register[x as usize] = self.v_register[x as usize].wrapping_add((op_code & 0x00FF) as u8), // Add NN to vx
 
             (8, x, y, 0) => self.v_register[x as usize] = self.v_register[y as usize], // Store vy in vx
 
