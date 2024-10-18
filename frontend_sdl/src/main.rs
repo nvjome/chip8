@@ -4,12 +4,10 @@ use std::fs::File;
 use std::io::Read;
 
 fn main() {
-    println!("Hello, world!");
-
     // Collect command line arguments
     let args: Vec<_> = env::args().collect();
-    if args.len() != 4 {
-        eprintln!("Usage: cargo run </path/to/rom> <cycles per frame> <cycles to run> ");
+    if 3 > args.len() || args.len() > 4 {
+        eprintln!("Usage: cargo run </path/to/rom> <cycles per frame> <cycles to run (optional)> ");
         process::exit(1);
     }
 
@@ -21,10 +19,17 @@ fn main() {
         }
     };
 
-    let cycles = match args[3].clone().parse::<u32>() {
-        Ok(n) => n,
-        Err(err) => {
-            eprintln!("Failed to parse arguments: {}", err);
+    let cycles = match args.len() {
+        3 => 0,
+        4 => match args[3].clone().parse::<u32>() {
+            Ok(n) => n,
+            Err(err) => {
+                eprintln!("Failed to parse arguments: {}", err);
+                process::exit(1);
+            }
+        },
+        _ => {
+            eprintln!("Usage: cargo run </path/to/rom> <cycles per frame> <cycles to run (optional)> ");
             process::exit(1);
         }
     };
