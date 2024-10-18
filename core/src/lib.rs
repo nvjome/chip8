@@ -258,9 +258,9 @@ impl CPU {
             },
 
             (0xD, x, y, n) => { // Draw n-byte sprite on screen at (vx,vy) starting at i, set vf if a pixel is erased
-                // Get sprite coordinates
-                let sprite_x = self.v_register[x as usize];
-                let sprite_y = self.v_register[y as usize];
+                // Get sprite coordinates, wrapping around screen edges
+                let sprite_x = self.v_register[x as usize] as usize % SCREEN_WIDTH;
+                let sprite_y = self.v_register[y as usize] as usize % SCREEN_HEIGHT;
                 let mut collide = false;
 
                 // Copy sprite from RAM. Uses more memory than just reading from RAM, but should make code cleaner
@@ -272,13 +272,14 @@ impl CPU {
                 for byte_row in 0..(sprite.len() as u8) {
                     for bit_col in 0..(SPRITE_WIDTH as u8) {
                         if ((0b10000000 >> bit_col) & sprite[byte_row as usize]) != 0 { // Sprite pixel is 1
-                            let pixel_x = (sprite_x + bit_col) as usize % SCREEN_WIDTH; // Wrap around screen
-                            let pixel_y = (sprite_y + byte_row) as usize % SCREEN_HEIGHT;
-
-                            let display_buffer_index = (pixel_y * SCREEN_WIDTH) + pixel_x;
-
-                            collide |= self.display_buffer[display_buffer_index]; // If display pixel is already 1, then there is a collision
-                            self.display_buffer[display_buffer_index] ^= true; // XOR sprite pixel and display pixel
+                            let pixel_x = sprite_x + bit_col as usize;
+                            let pixel_y = sprite_y + byte_row as usize;
+                            
+                            if pixel_x < SCREEN_WIDTH && pixel_y < SCREEN_HEIGHT { // Clip sprite pixels if off screen
+                                let display_buffer_index = (pixel_y * SCREEN_WIDTH) + pixel_x;
+                                collide |= self.display_buffer[display_buffer_index]; // If display pixel is already 1, then there is a collision
+                                self.display_buffer[display_buffer_index] ^= true; // XOR sprite pixel and display pixel
+                            }
                         }
                     }
                 }
