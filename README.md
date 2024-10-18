@@ -4,6 +4,8 @@ A CHIP-8 interpreter, written for the purpose of learning a little about Rust.
 
 This repo contains a Rust workspace, which separates the implementation of the backend (core) and frontend (frontend_sdl). A new frontend could be developed with a different graphics library, although I probably never will since SDL2 worked well for me here.
 
+Thi interpreter targets the "original" behavior of the CIP-8 interpreter for the COSMAC VIP. To that end, all functionality was developed against the test quite provided by [Tomendus](https://github.com/Timendus/chip8-test-suite), including the various quirks in instruction interpretations. There are many sources for the behavior of the instructions, and many have errors or inconsistencies, probably due to the variation in behavior seen on different systems the interpreter was ported to.
+
 ## Dependencies
 
 This project requires SDL2 to build and run. Follow the instructions on the [rust-sdl2](https://github.com/Rust-SDL2/rust-sdl2) GitHub page.
