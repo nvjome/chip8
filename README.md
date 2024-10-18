@@ -6,7 +6,7 @@ This repo contains a Rust workspace, which separates the implementation of the b
 
 ## Dependencies
 
-This project requires SDL2 to build and run. Follow the instructions on the (rust-sdl2)[https://github.com/Rust-SDL2/rust-sdl2] package GitHub page.
+This project requires SDL2 to build and run. Follow the instructions on the [rust-sdl2](https://github.com/Rust-SDL2/rust-sdl2) GitHub page.
 
 ## Quickstart
 
