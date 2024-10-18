@@ -87,7 +87,7 @@ impl CPU {
         // let mut rom_buffer = Vec::new();
         // rom_file.read_to_end(&mut rom_buffer)?;
 
-        if rom_buffer.len() > 0xA00 {
+        if rom_buffer.len() > 0xE00 {
             return Err(CoreError::RomSizeError.into());
         }
 
@@ -191,11 +191,20 @@ impl CPU {
 
             (8, x, y, 0) => self.v_register[x as usize] = self.v_register[y as usize], // Store vy in vx
 
-            (8, x, y, 1) => self.v_register[x as usize] = self.v_register[x as usize] | self.v_register[y as usize], // Store vx OR vy in vx
+            (8, x, y, 1) => { // // Store vx OR vy in vx
+                self.v_register[x as usize] = self.v_register[x as usize] | self.v_register[y as usize];
+                self.v_register[0xf] = 0;
+            },
 
-            (8, x, y, 2) => self.v_register[x as usize] = self.v_register[x as usize] & self.v_register[y as usize], // Store vx AND vy in vx
+            (8, x, y, 2) => { // Store vx AND vy in vx
+                self.v_register[x as usize] = self.v_register[x as usize] & self.v_register[y as usize];
+                self.v_register[0xf] = 0;
+            },
 
-            (8, x, y, 3) => self.v_register[x as usize] = self.v_register[x as usize] ^ self.v_register[y as usize], // Store vx XOR vy in vx
+            (8, x, y, 3) => { // Store vx XOR vy in vx
+                self.v_register[x as usize] = self.v_register[x as usize] ^ self.v_register[y as usize];
+                self.v_register[0xf] = 0;
+            },
 
             (8, x, y, 4) => { // Store vx + vy in vx, set/unset carry flag vf
                 let (sum, carry) = self.v_register[x as usize].overflowing_add(self.v_register[y as usize]);
@@ -215,9 +224,9 @@ impl CPU {
                 };
             },
 
-            (8, x, _, 6) => { // Set vf to LSB of vy, store vy >> 1 in vx
-                let lsb = self.v_register[x as usize] & 0x01;
-                self.v_register[x as usize] >>= 1;
+            (8, x, y, 6) => { // Set vf to LSB of vy, store vy >> 1 in vx
+                let lsb = self.v_register[y as usize] & 0x01;
+                self.v_register[x as usize] = self.v_register[y as usize] >> 1;
                 self.v_register[0xf] = lsb;
             },
 
@@ -242,7 +251,7 @@ impl CPU {
 
             (0xA, _, _, _) => self.index_register = op_code & 0x0FFF, // Set i to NNN
 
-            (0xB, _, _, _) => self.index_register = (op_code & 0x0FFF).wrapping_add(self.v_register[0] as u16), // Set i to NNN + v0
+            (0xB, x, _, _) => self.program_counter = (op_code & 0x0FFF).wrapping_add(self.v_register[0] as u16), // Set program counter to NNN + v0
 
             (0xC, x, _, _) => { // Set vx to random number 0-255, mask with NN
                 let random_number = rand::random::<u8>();

@@ -74,9 +74,16 @@ pub fn run_game(game: &mut GameSDL) -> Result<(), Box<dyn error::Error>> {
         if (cycles < game.run_cycles) || (game.run_cycles == 0) {
             for _ in 0..game.ticks_per_frame {
                 game.cpu.cycle()?;
+
                 // If run_cycles is non-zero, run only that many cycles
                 if game.run_cycles > 0 {
                     cycles += 1;
+                }
+
+                // If diplay buffer was updated, wait for next frame
+                if game.cpu.display_update_flag {
+                    game.cpu.display_update_flag = false;
+                    break;
                 }
             }
         }
