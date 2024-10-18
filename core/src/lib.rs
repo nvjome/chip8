@@ -34,7 +34,6 @@ pub struct CPU {
     key_states: [bool; NUM_KEYS],
     pressed_key: u8,
     wait_for_press: bool,
-    wait_for_release: bool,
 }
 
 impl CPU {
@@ -52,7 +51,6 @@ impl CPU {
             key_states: [false; NUM_KEYS],
             pressed_key: 0,
             wait_for_press: true,
-            wait_for_release: false,
         };
 
         new_cpu.load_font(&FONT_ADDRESS_OFFSET, &FONT_SET_1);
@@ -251,7 +249,7 @@ impl CPU {
 
             (0xA, _, _, _) => self.index_register = op_code & 0x0FFF, // Set i to NNN
 
-            (0xB, x, _, _) => self.program_counter = (op_code & 0x0FFF).wrapping_add(self.v_register[0] as u16), // Set program counter to NNN + v0
+            (0xB, _, _, _) => self.program_counter = (op_code & 0x0FFF).wrapping_add(self.v_register[0] as u16), // Set program counter to NNN + v0
 
             (0xC, x, _, _) => { // Set vx to random number 0-255, mask with NN
                 let random_number = rand::random::<u8>();
